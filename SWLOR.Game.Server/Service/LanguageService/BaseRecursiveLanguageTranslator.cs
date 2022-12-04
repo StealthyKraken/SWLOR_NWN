@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.Caching;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -20,6 +21,22 @@ namespace SWLOR.Game.Server.Service.LanguageService
             langFileLocation = specificLoc;
             generalFileLocation = generalLoc;
             UpdateDictionaries();
+        }
+
+        private MemoryCache _cache;
+        private MemoryCache _cacheAccessor
+        {
+            get
+            {
+                if (_cache != null)
+                    return _cache;
+                else
+                {
+                    _cache = new MemoryCache(this.GetType().ToString());
+                    //_cache.CacheMemoryLimit = 1 / 14;
+                    return _cache;
+                }
+            }
         }
 
         public string langFileLocation = "";
@@ -46,6 +63,9 @@ namespace SWLOR.Game.Server.Service.LanguageService
                 _translationCache = null;
                 lastTranslation = null;
             }
+
+            if (_cacheAccessor != null)
+                _cacheAccessor.Trim(100);
                 //_translationCache.Clear();
         }
 
@@ -230,11 +250,15 @@ namespace SWLOR.Game.Server.Service.LanguageService
         private string translateFromCache(string message, int englishChance, out string partiallyScrambled)
         {
             string[,] resultArray;
-            if (lastTranslation == message)
+            
+            resultArray = (_cacheAccessor.GetCacheItem(message)?.Value as string[,]);
+            /*if (lastTranslation == message)
             {
                 resultArray = _translationCache;
-            }
-            else
+            }*/
+            //else
+
+            if(resultArray == null)
             {
                 var sb = new StringBuilder();
                 //Fake the end of the former sentence, to better recognize the start of the new sentence
@@ -244,8 +268,10 @@ namespace SWLOR.Game.Server.Service.LanguageService
                 sb.Append("\"");
 
                 resultArray = translateRecursiveToCache(prepareStringForTranslation(sb.ToString()));
-                _translationCache = resultArray;
-                lastTranslation = message;
+
+                _cacheAccessor.Add(message, resultArray, DateTimeOffset.Now.AddSeconds(30));
+                //_translationCache = resultArray;
+                //lastTranslation = message;
 
             }
             //20221129 Hans: For using a dictionary
